@@ -1,0 +1,169 @@
+syntax = "proto3";
+
+package maumai.llm_agent.smart_notebook.v1;
+
+service RagService {
+    rpc EmbedDocument (EmbedRequest) returns (EmbedResponse);
+    rpc SummarizeDocument (SummarizeRequest) returns (SummarizeResponse);
+    rpc RagChat (RagRequest) returns (stream RagResponse);
+};
+
+
+message RemoteServiceConfig {
+    string provider = 1;
+    string model_name = 2;
+    optional string api_key = 3;
+    optional string endpoint = 4;
+}
+
+
+message LLMConfig {
+    message LLMParameter {
+        optional float temperature = 1;
+        optional float top_p = 2;
+        optional float presence_penalty = 3;
+        optional float frequency_penalty = 4;
+        optional int32 max_tokens = 5;
+        optional string system_prompt = 6;
+        optional string user_prompt = 7;
+        optional float top_k = 8;
+    }
+    RemoteServiceConfig llm_service = 1;
+    LLMParameter parameter = 2;
+}
+
+message EmbedConfig {
+    RemoteServiceConfig embedding_service = 1;
+
+    optional int32 rrf_rank_constant = 2;
+    optional float rrf_sparse_weight = 3;
+    optional float rrf_dense_weight = 4;
+}
+
+message MessageContent {
+    enum MessageType {
+        MSG_TYPE_UNKNOWN = 0;
+        MSG_TYPE_TEXT = 1;
+        MSG_TYPE_IMAGE = 2;
+        MSG_TYPE_AUDIO = 3;
+        MSG_TYPE_TABLE = 4;
+    }
+  
+    oneof content {
+        StatusContent status = 1;
+        TextContent text = 2;
+        BinaryContent binary = 3;
+    }
+}
+
+message StatusContent {
+    enum ErrorCode {
+        ERROR_UNKNOWN = 0;
+        ERROR_NO_AGENT = 1;
+        ERROR_BAD_PROMPT = 2;
+    }
+    enum StatusCode {
+        STATUS_UNKNOWN = 0;
+        STATUS_REQUEST_RECEIVED = 1;
+        STATUS_AGENT_INIT = 2;
+        STATUS_MEMORY_LOADED = 3;
+    
+        STATUS_NODE_START = 4;
+        STATUS_NODE_END = 5;
+        STATUS_PENDING_LLM = 6;
+        STATUS_INTERRUPT = 7;
+    
+        STATUS_STREAM_START = 8;
+        STATUS_STREAM_END = 9;
+    }
+  
+    oneof code {
+        ErrorCode error_code = 1;
+        StatusCode status_code = 2;
+    }
+    string message = 3;
+}
+  
+message TextContent {
+    oneof text {
+        string full_text = 1;
+        string text_segment = 2;
+    }
+    int32 sequence_index = 3; // 0 if full_text
+    bool end_of_stream = 4;
+}
+  
+message BinaryContent {
+    oneof binary {
+        bytes full_data = 1;
+        bytes data_segment = 2;
+    }
+    string mime_type = 3;
+    string description = 4;
+  
+    int32 sequence_index = 5;
+    bool end_of_stream = 6;
+}
+
+
+message EmbedRequest {
+    message DocumentMeta {
+        string document_id = 1;
+        oneof file {
+            string file_path = 2;
+            bytes file_data = 3;
+        }
+    }
+    repeated DocumentMeta documents = 1;
+    EmbedConfig embed_config = 2; // optional
+    optional int64 req_id = 3;
+}
+
+message EmbedResponse {
+    message MarkdownResult {
+        string document_id = 1;
+        MessageContent content = 2;
+    }
+    repeated MarkdownResult markdown_result = 1;
+    optional int64 req_id = 2;
+}
+
+message SummarizeRequest {
+    repeated string document_id = 1;
+    optional int64 req_id = 2;
+}
+
+message SummarizeResponse {
+    MessageContent content = 1;
+    optional int64 req_id = 2;
+}
+
+message RagRequest {
+    message RetrievalConfig {
+        optional int32 top_k = 1;
+        optional int32 knn_k = 7;
+        optional int32 num_candidates = 8;
+
+        optional bool use_sparse_vector=13;
+        optional bool use_dense_vector=14;
+    }
+    repeated string document_id = 1;
+    string msg = 2;
+    RetrievalConfig retrieval_config = 3;
+    optional int64 req_id = 4;
+}
+
+message RagResponse {
+    enum MessageRole {
+        MSG_ROLE_UNKNOWN = 0;
+        MSG_ROLE_NONE = 1;
+        MSG_ROLE_ANSWER = 2;
+        MSG_ROLE_REFERENCE = 3;
+        MSG_ROLE_THINK = 4;
+        MSG_ROLE_COT = 5;
+    }
+  
+    MessageRole msg_role = 1;
+    MessageContent content = 2;
+    optional int64 req_id = 3;
+}
