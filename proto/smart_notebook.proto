@@ -2,7 +2,9 @@ syntax = "proto3";
 
 package maumai.llm_agent.smart_notebook.v1;
 
-service RagService {
+import "google/rpc/status.proto";
+
+service SmartNoteService {
     rpc EmbedDocument (EmbedRequest) returns (EmbedResponse);
     rpc SummarizeDocument (SummarizeRequest) returns (SummarizeResponse);
     rpc RagChat (RagRequest) returns (stream RagResponse);
@@ -49,39 +51,11 @@ message MessageContent {
         MSG_TYPE_TABLE = 4;
     }
   
+    MessageType message_type = 1;
     oneof content {
-        StatusContent status = 1;
         TextContent text = 2;
         BinaryContent binary = 3;
     }
-}
-
-message StatusContent {
-    enum ErrorCode {
-        ERROR_UNKNOWN = 0;
-        ERROR_NO_AGENT = 1;
-        ERROR_BAD_PROMPT = 2;
-    }
-    enum StatusCode {
-        STATUS_UNKNOWN = 0;
-        STATUS_REQUEST_RECEIVED = 1;
-        STATUS_AGENT_INIT = 2;
-        STATUS_MEMORY_LOADED = 3;
-    
-        STATUS_NODE_START = 4;
-        STATUS_NODE_END = 5;
-        STATUS_PENDING_LLM = 6;
-        STATUS_INTERRUPT = 7;
-    
-        STATUS_STREAM_START = 8;
-        STATUS_STREAM_END = 9;
-    }
-  
-    oneof code {
-        ErrorCode error_code = 1;
-        StatusCode status_code = 2;
-    }
-    string message = 3;
 }
   
 message TextContent {
@@ -110,32 +84,39 @@ message EmbedRequest {
     message DocumentMeta {
         string document_id = 1;
         oneof file {
-            string file_path = 2;
-            bytes file_data = 3;
+            string file_url = 2;
+            string file_path = 3;
+            bytes file_data = 4;
         }
+         // MUST PROVIDE SUFFIX if only if file type == file_data bytes, ex) .pdf / .xlsx / ...
+        optional string suffix = 5;
     }
-    repeated DocumentMeta documents = 1;
-    EmbedConfig embed_config = 2; // optional
-    optional int64 req_id = 3;
+    DocumentMeta document = 1;
+    EmbedConfig embed_config = 2; 
+    int64 req_id = 3;
+}
+
+message EmbedResult {
+    string document_id = 1;
+    string markdown = 2;
+    string summary = 3;
 }
 
 message EmbedResponse {
-    message MarkdownResult {
-        string document_id = 1;
-        MessageContent content = 2;
-    }
-    repeated MarkdownResult markdown_result = 1;
-    optional int64 req_id = 2;
+    int64 req_id = 1;
+    google.rpc.Status status = 2;
+    EmbedResult result = 3;
 }
 
 message SummarizeRequest {
-    repeated string document_id = 1;
-    optional int64 req_id = 2;
+    repeated string summaries = 1;
+    int64 req_id = 2;
 }
 
 message SummarizeResponse {
-    MessageContent content = 1;
-    optional int64 req_id = 2;
+    int64 req_id = 1;
+    google.rpc.Status status = 2;
+    optional string result = 3;
 }
 
 message RagRequest {
@@ -150,7 +131,7 @@ message RagRequest {
     repeated string document_id = 1;
     string msg = 2;
     RetrievalConfig retrieval_config = 3;
-    optional int64 req_id = 4;
+    int64 req_id = 4;
 }
 
 message RagResponse {
@@ -163,7 +144,8 @@ message RagResponse {
         MSG_ROLE_COT = 5;
     }
   
-    MessageRole msg_role = 1;
-    MessageContent content = 2;
-    optional int64 req_id = 3;
+    int64 req_id = 1;
+    MessageRole msg_role = 2;
+    google.rpc.Status status = 3;
+    MessageContent result = 4;
 }
