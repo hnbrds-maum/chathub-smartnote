@@ -1,36 +1,56 @@
 # -*- coding: utf-8 -*-
+import os
+from dotenv import load_dotenv
+load_dotenv(".env")
 import asyncio
 import argparse
-import base64
-import json
 import tempfile
-import os
-import re
 import sys
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import AsyncIterator, Optional
-import pathlib
 from pathlib import Path
 
 import grpc
 from grpc_reflection.v1alpha import reflection
-from dotenv import load_dotenv
 
 sys.path.append("./proto")
 from proto import smart_notebook_pb2 as pb  # type: ignore
 from proto import smart_notebook_pb2_grpc as pb_grpc  # type: ignore
 from google.rpc import status_pb2, code_pb2
 
-from document_parser import DocumentParser
-from browser import afetch_rendered_html
+from langchain_openai import ChatOpenAI
+
+from database.document_parser import DocumentParser
+from database.retriever import Retriever
+from utils.browser import afetch_rendered_html, HTTPStatusError
+from utils.emoji import generate_random_emoji
+from agents.rag_agent import RagAgent
+from agents.summary_agent import SummaryAgent
 
 # ──────────────────────────────── 환경 설정
-load_dotenv("/workspace/.env")
-FILE_ROOT = os.getenv("FILE_UPLOAD_DIR")
+
+FILE_ROOT = str(os.getenv("FILE_UPLOAD_DIR"))
+VECTORSTORE_ROOT = str(os.getenv("VECTORSTORE_DIR"))
+OPENAI_MODEL_NAME = str(os.getenv("OPENAI_MODEL_NAME", "gpt-4.1"))
+REMOVE_EMBEDDED_DOCUMENT = os.getenv("REMOVE_EMBEDDED_DOCUMENT").lower() in ('true', '1', 't')
 
 # ──────────────────────────────── gRPC Servicer 구현
+
+def end_of_stream(req_id):
+    return pb.RagResponse(
+        req_id=req_id, 
+        msg_role=pb.RagResponse.MessageRole.MSG_ROLE_ANSWER,
+        status=status_pb2.Status(code=code_pb2.OK),
+        result=pb.MessageContent(
+            message_type=pb.MessageContent.MessageType.MSG_TYPE_UNKNOWN,
+            text=pb.TextContent(
+                text_segment="",
+                sequence_index=0,
+                end_of_stream=True
+            )
+        )
+    )
 
 class SmartNoteService(pb_grpc.SmartNoteServiceServicer):
     """Single global GRAPH를 사용. 세션에는 cfg·interrupted 상태만 보관."""
@@ -53,6 +73,8 @@ class SmartNoteService(pb_grpc.SmartNoteServiceServicer):
         doc = request.document
 
         try:
+            llm = ChatOpenAI(model=OPENAI_MODEL_NAME)
+
             if doc.HasField("file_url"):
                 # gRPC string -> read from url
                 with tempfile.NamedTemporaryFile(
@@ -74,21 +96,62 @@ class SmartNoteService(pb_grpc.SmartNoteServiceServicer):
                     fp.write(doc.file_data)
                     tmp_path = Path(fp.name)
             else:
-                ValueError("No file_* field is provided")
+                raise ValueError("No file_* field is provided")
 
             parser = DocumentParser(tmp_path)
-            markdown = await loop.run_in_executor(None, parser.get_markdown)
-            os.remove(tmp_path)
+            markdown = await asyncio.to_thread(parser.get_markdown)
+            if not markdown:
+                _status = status_pb2.Status(
+                    code=code_pb2.ABORTED,
+                    message="[ERROR] Document has not text"
+                )
+                return pb.EmbedResponse(
+                    req_id=request.req_id,
+                    status=_status
+                )
 
+            chunks = await asyncio.to_thread(parser.get_chunk, markdown)
+            index_path = Path(VECTORSTORE_ROOT) / doc.document_id
+
+            build_faiss_task = asyncio.to_thread(
+                Retriever.build_faiss, chunks, index_path
+            )
+
+            summary_task = SummaryAgent(llm).async_run([x.content for x in markdown])
+            summary_result, _ = await asyncio.gather(summary_task, build_faiss_task)
+
+            if REMOVE_EMBEDDED_DOCUMENT and tmp_path and tmp_path.exists():
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+            sections = [
+                pb.MarkdownSection(id=x.id, header=x.header, content=x.content) \
+                for x in markdown
+            ]
             result = pb.EmbedResult(
                 document_id=doc.document_id,
-                markdown=markdown,
-                summary="document summary",
+                sections=sections,
+                summary=summary_result.get("summary", ""),
             )
-            return pb.EmbedResponse(req_id=request.req_id,
-                                    status=status_pb2.Status(code=code_pb2.OK),
-                                    result=result)
-        
+            return pb.EmbedResponse(
+                req_id=request.req_id,
+                status=status_pb2.Status(code=code_pb2.OK),
+                result=result
+            )
+
+        # ERROR Handling
+        except HTTPStatusError as e:
+            # browser url parse error
+            _status = status_pb2.Status(
+                code=code_pb2.ABORTED,
+                message=str(f"URL 요청 실패 : {e.url} / {e.status}")
+            )
+            return pb.EmbedResponse(
+                req_id=request.req_id,
+                status=_status
+            )
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -107,34 +170,85 @@ class SmartNoteService(pb_grpc.SmartNoteServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> pb.SummarizeResponse:
 
-        return pb.SummarizeResponse(
-            req_id=request.req_id,
-            status=status_pb2.Status(code=code_pb2.OK),
-            result="예시 Response",
-        )
+        try:
+            llm = ChatOpenAI(model=OPENAI_MODEL_NAME)
+            summary = await SummaryAgent(llm).async_run(
+                list(request.summaries), single_document=False
+            )
+
+            return pb.SummarizeResponse(
+                req_id=request.req_id,
+                status=status_pb2.Status(code=code_pb2.OK),
+                result=summary['summary'],
+                title=summary['title'],
+                emoji=generate_random_emoji()
+            )
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            _status = status_pb2.Status(
+                code=code_pb2.ABORTED,
+                message=str(e)
+            )
+            return pb.SummarizeResponse(
+                req_id=request.req_id,
+                status=_status
+            )
+
     
     async def RagChat(
         self,
         request: pb.RagRequest,
         context: grpc.aio.ServicerContext,
     ) -> AsyncIterator[pb.RagResponse]:
-        from sample import SAMPLE_TEXT
 
-        last_idx = len(SAMPLE_TEXT) -1
-        for idx, char in enumerate(SAMPLE_TEXT):
-            result = pb.MessageContent(
+        try:
+            llm = ChatOpenAI(model=OPENAI_MODEL_NAME)
+            index_paths = [os.path.join(VECTORSTORE_ROOT, x) for x in list(request.document_id)]
+            answer = await RagAgent(llm, index_paths).async_run(request.msg)
+
+            yield pb.RagResponse(
+                req_id=request.req_id, 
+                msg_role=pb.RagResponse.MessageRole.MSG_ROLE_ANSWER,
+                status=status_pb2.Status(code=code_pb2.OK),
+                result=pb.MessageContent(
                     message_type=pb.MessageContent.MessageType.MSG_TYPE_TEXT,
                     text=pb.TextContent(
-                            text_segment=char,
-                            sequence_index=idx,
-                            end_of_stream=(idx == last_idx),
-                        ),
+                        full_text=answer['final_answer'], 
+                        sequence_index=0,
+                        end_of_stream=False
                     )
-            yield pb.RagResponse(req_id=request.req_id, 
-                                 msg_role=pb.RagResponse.MessageRole.MSG_ROLE_ANSWER,
-                                 status=status_pb2.Status(code=code_pb2.OK),
-                                 result=result)
-            await asyncio.sleep(0.01)
+                ),
+                title=answer['title']#answer['search_queries'][0]
+            )
+
+        except RuntimeError as e:
+            import traceback
+            traceback.print_exc()
+            _status = status_pb2.Status(
+                code=code_pb2.ABORTED,
+                message=f"Error during loading vectorstore (document_id : {list(request.document_id)})"
+            )
+            yield pb.RagResponse(
+                req_id=request.req_id,
+                status=_status
+            )           
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            _status = status_pb2.Status(
+                code=code_pb2.ABORTED,
+                message=str(e)
+            )
+            yield pb.RagResponse(
+                req_id=request.req_id,
+                status=_status
+            )
+
+        finally:
+            yield end_of_stream(request.req_id)
 
 
 # ──────────────────────────────── gRPC 서버 부트스트랩
@@ -148,7 +262,9 @@ async def serve(port: int = 8085, max_workers: int = 32):
             # 빠른 단절 감지를 위한 keep‑alive
             ("grpc.keepalive_time_ms", 60_000),
             ("grpc.keepalive_timeout_ms", 20_000),
-            ("grpc.http2.max_pings_without_data", 0),
+            ("grpc.keepalive_permit_without_calls", True),
+            ("grpc.http2.max_ping_strikes", 0),
+            ("grpc.http2.max_pings_without_data", 0)
         ],
     )
     pb_grpc.add_SmartNoteServiceServicer_to_server(SmartNoteService(), server)
@@ -185,6 +301,5 @@ if __name__ == "__main__":
         "prod": ".env.production",
         "docker": ".env.docker",
     }
-    load_dotenv(env_map.get(os.getenv("ENV"), ".env"))
 
     asyncio.run(serve(port=args.port))

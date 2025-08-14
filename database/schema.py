@@ -16,17 +16,13 @@ class VLMFormat(BaseModel):
     image_type: Literal["DECORATIVE", "INFORMATIVE"] = Field(description="DECORATIVE = purely stylistic image / INFORMATIVE = image which conveys docuement content")
     caption: str = Field(description="Concise 2-3 sentence caption in Korean. Omit if DECORATIVE")
 
+
 class Chunk(BaseModel):
     # Basic Elastic schema
+    document_id: str
+    heading_id: Optional[str] = None
     chunk_id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     chunk_type: str = Literal["TEXT", "PICTURE", "TABLE"]
     content: str
-    page_start: int
-    page_end: int
-    document_id: str
-
-    # for GraphDB
-    headings: List[str]
-    entities: List[Dict]
     previous_id : Optional[str] = None # only for text chunk
     file_path: Optional[str] = None # only for image

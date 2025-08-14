@@ -1,3 +1,4 @@
+emoji
 pydantic
 pymupdf
 celery
@@ -17,8 +18,12 @@ pytest-playwright
 pymupdf
 neo4j
 elasticsearch==8.*
+langchain-openai
 langchain_experimental
 langchain-text-splitters
+langgraph
+rank_bm25
+faiss-cpu
 transformers
 
 protobuf>=5.27,<6

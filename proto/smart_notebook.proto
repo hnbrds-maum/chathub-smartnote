@@ -18,7 +18,6 @@ message RemoteServiceConfig {
     optional string endpoint = 4;
 }
 
-
 message LLMConfig {
     message LLMParameter {
         optional float temperature = 1;
@@ -79,7 +78,6 @@ message BinaryContent {
     bool end_of_stream = 6;
 }
 
-
 message EmbedRequest {
     message DocumentMeta {
         string document_id = 1;
@@ -96,9 +94,15 @@ message EmbedRequest {
     int64 req_id = 3;
 }
 
+message MarkdownSection {
+    string id = 1;
+    string header = 2;
+    string content = 3;
+}
+
 message EmbedResult {
     string document_id = 1;
-    string markdown = 2;
+    repeated MarkdownSection sections = 2;
     string summary = 3;
 }
 
@@ -116,7 +120,9 @@ message SummarizeRequest {
 message SummarizeResponse {
     int64 req_id = 1;
     google.rpc.Status status = 2;
-    optional string result = 3;
+    string result = 3;
+    string title = 4;
+    string emoji = 5;
 }
 
 message RagRequest {
@@ -148,4 +154,5 @@ message RagResponse {
     MessageRole msg_role = 2;
     google.rpc.Status status = 3;
     MessageContent result = 4;
+    string title = 5;
 }

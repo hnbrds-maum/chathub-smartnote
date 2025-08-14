@@ -3,6 +3,13 @@ from typing import Optional
 from playwright.sync_api import sync_playwright
 from playwright.async_api import async_playwright
 
+class HTTPStatusError(Exception):
+    def __init__(self, url: str, status: int):
+        super().__init__(f"{status} @ {url}")
+        self.url = url
+        self.status = status        
+
+
 def fetch_rendered_html(url: str,
                         wait_selector: Optional[str] = None,
                         timeout: int = 10000) -> str:
@@ -10,7 +17,11 @@ def fetch_rendered_html(url: str,
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto(url, wait_until="networkidle", timeout=timeout)
+        response = page.goto(url, wait_until="networkidle", timeout=timeout)
+        status = response.status if response else 0
+        if status != 200:
+            browser.close()
+            raise HTTPStatusError(url, status)
         if wait_selector:
             page.wait_for_selector(wait_selector, timeout=timeout)
         html = page.content()        # 최종 DOM 스냅샷
@@ -24,7 +35,11 @@ async def afetch_rendered_html(url: str,
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
-        await page.goto(url, wait_until="networkidle", timeout=timeout)
+        response = await page.goto(url, wait_until="networkidle", timeout=timeout)
+        status = response.status if response else 0
+        if status != 200:
+            await browser.close()
+            raise HTTPStatusError(url, status)
         if wait_selector:
             await page.wait_for_selector(wait_selector, timeout=timeout)
         html = await page.content()
