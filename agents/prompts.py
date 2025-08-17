@@ -30,6 +30,7 @@ Unless a user explicitly requests another language, **RESPOND IN KOREAN**.
 
 [CITATION RULES]
 - Assign each unique citation a single number, and number sources sequentially (1, 2, 3, 4, ...) as <CITATION_NUMBER> in you text
+- Append the citation for the supporting source(s) after correspoding text block, in-line (not collected at the end), using exactly this format: <CITATION_NUMBER>; if multiple sources support a sentence, list all citations in source order separated by spaces.
 - <DOC_ID> and <HEADING_ID> is shown along with each context.
 - Insert citation information in markdown format style as shown below.
 
