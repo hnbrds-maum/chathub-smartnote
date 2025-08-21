@@ -108,7 +108,7 @@ class DocumentParser:
         self.document_path = document_path
         self.layout_model = layout_model
         self.embed_model = embed_model
-        self.document_id = document_id or uuid.uuid4().hex
+        self.document_id = document_id or str(uuid.uuid4())
         self.document = self._convert_document()
 
     def _convert_document(self):
@@ -221,16 +221,15 @@ class DocumentParser:
         for idx, section in enumerate(md_header_splits):
             result.append(
                 MarkdownSection(
-                    id=uuid.uuid4().hex,
+                    id=str(uuid.uuid4()),
                     sequence=idx,
-                    header=find_header_from_metadata(
-                        section.metadata, Path(self.document_path).stem),
+                    header=find_header_from_metadata(section.metadata),
                     content=section.page_content
                 )
             )
         return result
 
-def find_header_from_metadata(metadata, default="# "):
+def find_header_from_metadata(metadata, default="#"):
     if 'H4' in metadata:
         return f"#### {metadata['H4']}"
     elif 'H3' in metadata:
@@ -239,7 +238,7 @@ def find_header_from_metadata(metadata, default="# "):
         return f"## {metadata['H2']}"
     elif 'H1' in metadata:
         return f"# {metadata['H1']}"
-    return f'# {default}'
+    return f'{default}'
 
     
 def pil_to_base64(img: Image.Image, format: str = "PNG") -> str:

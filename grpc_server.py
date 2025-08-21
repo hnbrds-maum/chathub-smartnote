@@ -98,7 +98,8 @@ class SmartNoteService(pb_grpc.SmartNoteServiceServicer):
             else:
                 raise ValueError("No file_* field is provided")
 
-            parser = DocumentParser(tmp_path)
+            parser = DocumentParser(tmp_path,
+                                    document_id=doc.document_id)
             markdown = await asyncio.to_thread(parser.get_markdown)
             if not markdown:
                 _status = status_pb2.Status(

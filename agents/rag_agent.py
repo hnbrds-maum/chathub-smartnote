@@ -86,15 +86,15 @@ class EvaluateSearchFormat(BaseModel):
 
 async def evaluate_search_results(state: RagAgentState, config):
     llm = config['configurable'].get("llm")
-    user_prompt = Template(EVALUATE_SEARCH_RESULT_USER).render(
-        input=state['input'],
-        documents=state['documents']
-    )
     prompt = ChatPromptTemplate.from_messages(
-        [("system", EVALUATE_SEARCH_RESULT_SYSTEM), ("human", user_prompt)]
+        [("system", EVALUATE_SEARCH_RESULT_SYSTEM),
+         ("human", EVALUATE_SEARCH_RESULT_USER)]
     )
     chain = prompt | llm.with_structured_output(EvaluateSearchFormat)
-    response = await chain.ainvoke({"input": state['input']})
+    response = await chain.ainvoke(
+        {"input": state['input'],
+         "documents" : state['documents']}
+    )
     return {"is_search_sufficient": response.is_sufficient}
 
 

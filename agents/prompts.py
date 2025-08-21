@@ -21,7 +21,7 @@ EVALUATE_SEARCH_RESULT_USER = """[User's question]
 {input}
 
 [Search results]
-{{documents}}"""
+{documents}"""
 
 
 GENERATE_RAG_ANSWER_SYSTEM = """Refer to the given context, and answer the user's question and make a short title for the conversation.
@@ -30,13 +30,12 @@ Unless a user explicitly requests another language, **RESPOND IN KOREAN**.
 
 [CITATION RULES]
 - Assign each unique citation a single number, and number sources sequentially (1, 2, 3, 4, ...) as <CITATION_NUMBER> in you text
-- Append the citation for the supporting source(s) after correspoding text block, in-line (not collected at the end), using exactly this format: <CITATION_NUMBER>; if multiple sources support a sentence, list all citations in source order separated by spaces.
+- Append the citation for the supporting source(s) after EVERY CORRESPONDING TEXT BLOCK(single sentence or a paragraph, ...), in-line (not collected at the end), using exactly this format: <CITATION_NUMBER>; if multiple sources support a sentence, list all citations in source order separated by spaces.
 - <DOC_ID> and <HEADING_ID> is shown along with each context.
 - Insert citation information in markdown format style as shown below.
 
 [CITATION FORMAT]
 - [<CITATION_NUMBER>](btn:<DOC_ID>/<HEADING_ID>)
-- ex: [1](btn:f7ca5655b84a490383b3d0a1b27691af/2f25d5513828443a83a6777469ba7d9a)
 """
 
 GENERATE_RAG_ANSWER_USER = """[Context]
