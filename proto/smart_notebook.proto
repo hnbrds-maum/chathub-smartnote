@@ -92,7 +92,6 @@ enum EmbedStage {
 
 message WebhookInfo {
     string endpoint = 1;
-    string main_session_key = 2;
     string notebook_id = 3;
     string jwt_token = 4;
 }
