@@ -37,7 +37,12 @@ class SmartNoteServiceStub(object):
         self.EmbedDocument = channel.unary_unary(
                 '/maumai.llm_agent.smart_notebook.v1.SmartNoteService/EmbedDocument',
                 request_serializer=smart__notebook__pb2.EmbedRequest.SerializeToString,
-                response_deserializer=smart__notebook__pb2.EmbedResponse.FromString,
+                response_deserializer=smart__notebook__pb2.ProgressResponse.FromString,
+                _registered_method=True)
+        self.EmbedProgress = channel.unary_unary(
+                '/maumai.llm_agent.smart_notebook.v1.SmartNoteService/EmbedProgress',
+                request_serializer=smart__notebook__pb2.ProgressRequest.SerializeToString,
+                response_deserializer=smart__notebook__pb2.ProgressResponse.FromString,
                 _registered_method=True)
         self.SummarizeDocument = channel.unary_unary(
                 '/maumai.llm_agent.smart_notebook.v1.SmartNoteService/SummarizeDocument',
@@ -55,6 +60,12 @@ class SmartNoteServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def EmbedDocument(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def EmbedProgress(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -78,7 +89,12 @@ def add_SmartNoteServiceServicer_to_server(servicer, server):
             'EmbedDocument': grpc.unary_unary_rpc_method_handler(
                     servicer.EmbedDocument,
                     request_deserializer=smart__notebook__pb2.EmbedRequest.FromString,
-                    response_serializer=smart__notebook__pb2.EmbedResponse.SerializeToString,
+                    response_serializer=smart__notebook__pb2.ProgressResponse.SerializeToString,
+            ),
+            'EmbedProgress': grpc.unary_unary_rpc_method_handler(
+                    servicer.EmbedProgress,
+                    request_deserializer=smart__notebook__pb2.ProgressRequest.FromString,
+                    response_serializer=smart__notebook__pb2.ProgressResponse.SerializeToString,
             ),
             'SummarizeDocument': grpc.unary_unary_rpc_method_handler(
                     servicer.SummarizeDocument,
@@ -117,7 +133,34 @@ class SmartNoteService(object):
             target,
             '/maumai.llm_agent.smart_notebook.v1.SmartNoteService/EmbedDocument',
             smart__notebook__pb2.EmbedRequest.SerializeToString,
-            smart__notebook__pb2.EmbedResponse.FromString,
+            smart__notebook__pb2.ProgressResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def EmbedProgress(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/maumai.llm_agent.smart_notebook.v1.SmartNoteService/EmbedProgress',
+            smart__notebook__pb2.ProgressRequest.SerializeToString,
+            smart__notebook__pb2.ProgressResponse.FromString,
             options,
             channel_credentials,
             insecure,
