@@ -209,7 +209,7 @@ async def run_one_document(job: DocTask):
             payload = {"status": "SOURCE_CREATED"}
             if markdown_sections_json is not None:
                 payload["markdowns"] = markdown_sections_json
-            if summary is not None:
+            if summary_text is not None:
                 payload["summary"] = summary_text
 
             await _send_embed_webhook(webhook, doc_id, payload)
