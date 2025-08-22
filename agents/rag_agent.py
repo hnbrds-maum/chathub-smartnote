@@ -6,7 +6,7 @@ from jinja2 import Template
 from typing import Any, List, Annotated, Sequence, TypedDict
 from pydantic import BaseModel, Field
 from langgraph.graph import START, END, StateGraph
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.prompts.chat import ChatPromptTemplate
 
 from database.retriever import Retriever
@@ -73,11 +73,11 @@ async def generate_queries(state: RagAgentState, config):
         search_queries=" / ".join(x for x in state.get('search_queries', [])),
         documents='\n\n'.join(x for x in state.get('documents', []))
     )
-    prompt = ChatPromptTemplate.from_messages(
-        [("system", system_prompt), ("human", '{input}')]
-    )
-    chain = prompt | llm.with_structured_output(GenerateQueryFormat)
-    response = await chain.ainvoke({'input' : state['input']})
+    chain = llm.with_structured_output(GenerateQueryFormat)  # 구조화 출력
+    response = await chain.ainvoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=state["input"])
+    ])
     return {"search_queries" : response.search_queries}
 
 
