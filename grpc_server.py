@@ -111,7 +111,7 @@ class SmartNoteService(pb_grpc.SmartNoteServiceServicer):
                     status=_status
                 )
 
-            chunks = await asyncio.to_thread(parser.get_chunk, markdown)
+            chunks = await asyncio.to_thread(parser.get_chunk, False, False, markdown)
             index_path = Path(VECTORSTORE_ROOT) / doc.document_id
 
             build_faiss_task = asyncio.to_thread(
