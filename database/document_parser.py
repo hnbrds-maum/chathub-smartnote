@@ -3,6 +3,7 @@ import io
 import uuid
 import json
 import logging
+logger = logging.getLogger("SmartNote")
 import yaml
 import base64
 from pathlib import Path
@@ -21,8 +22,8 @@ from docling_core.types.doc import PictureItem
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import (
     PdfPipelineOptions,
-    EasyOcrOptions,
-    RapidOcrOptions
+    RapidOcrOptions,
+    EasyOcrOptions
 )
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
@@ -51,6 +52,20 @@ from database.schema import *
 
 CHUNK_SIZE = 256
 CHUNK_OVERLAP = 32
+
+MODEL_BASE = Path("/workspace/models").resolve()
+#MODEL_BASE = Path("/Users/jysung/Projects/chathub-smartnote/models/PPOCR").resolve()
+OCR_DET = (MODEL_BASE / "PPOCR/PP-OCRv5_server_det_infer.onnx").resolve()
+OCR_REC = (MODEL_BASE / "PPOCR/korean_PP-OCRv5_mobile_rec_infer.onnx").resolve()
+OCR_CLS = (MODEL_BASE / "PPOCR/ch_ppocr_mobile_v2.0_cls_infer.onnx").resolve()
+OCR_DICT = (MODEL_BASE / "PPOCR/ppocrv5_korean_dict.txt").resolve()
+
+EASY_OCR_PATH = (MODEL_BASE / "docling/EasyOcr").resolve()
+
+ARTIFACTS_PATH = (MODEL_BASE / "docling").resolve()
+EMBED_MODEL_PATH = (MODEL_BASE / "sentence-transformers/all-MiniLM-L6-v2").resolve()
+
+NUM_THREADS_DOC_PARSER = os.getenv("NUM_THREADS_DOC_PARSER", 2)
 
 MARKDOWN_HEADERS_TO_SPLIT = [
     ("#", "H1"),
@@ -99,22 +114,31 @@ class OpenaiTagger:
     
 
 class DocumentParser:
-    DEFAULT_IMAGE_RESOLUTION_SCALE = 1.0
+    DEFAULT_IMAGE_RESOLUTION_SCALE = 2.0
     
     def __init__(self, document_path,
-                 layout_model="ds4sd/docling-models",
-                 embed_model="sentence-transformers/all-MiniLM-L6-v2",
+                 artifacts_path=ARTIFACTS_PATH,
+                 embed_model_path=EMBED_MODEL_PATH,
                  document_id=None):
         self.document_path = document_path
-        self.layout_model = layout_model
-        self.embed_model = embed_model
+        self.artifacts_path = artifacts_path
+        self.embed_model_path = embed_model_path
         self.document_id = document_id or str(uuid.uuid4())
         self.document = self._convert_document()
 
     def _convert_document(self):
-        ocr_opts = EasyOcrOptions(lang=["ko", "en"])
+        ocr_opts = RapidOcrOptions(
+            det_model_path=str(OCR_DET),
+            use_det=True,
+            cls_model_path=str(OCR_CLS),
+            use_cls=False,
+            rec_model_path=str(OCR_REC),
+            rec_keys_path=str(OCR_DICT),
+            use_rec=True,
+            force_full_page_ocr=False,
+        )
         pdf_pipeline_opts = PdfPipelineOptions(
-            layout_model=self.layout_model,
+            artifacts_path=self.artifacts_path,
             do_ocr=True,
             ocr_options=ocr_opts,
             include_images=True
@@ -124,15 +148,26 @@ class DocumentParser:
         pdf_pipeline_opts.do_table_structure = True
         pdf_pipeline_opts.table_structure_options.do_cell_matching = True
         pdf_pipeline_opts.accelerator_options = AcceleratorOptions(
-            num_threads=8, device=AcceleratorDevice.AUTO
+            num_threads=NUM_THREADS_DOC_PARSER, device=AcceleratorDevice.AUTO
         )
-        
-        doc_converter = DocumentConverter(
-            format_options={
-                InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_pipeline_opts)
-            }
-        )
-        return doc_converter.convert(self.document_path).document
+       
+        try:
+            conv = DocumentConverter(
+                format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_pipeline_opts)}
+            )
+            return conv.convert(self.document_path).document
+
+        except AttributeError as e:
+            logging.warning("RapidOCR ERROR -> Fallback to EasyOCR")
+            pdf_pipeline_opts.ocr_options = EasyOcrOptions(
+                lang=["ko", "en"],
+                download_enabled=True,
+                model_storage_directory=str(EASY_OCR_PATH)
+            )
+            conv = DocumentConverter(
+                format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_pipeline_opts)}
+            )
+            return conv.convert(self.document_path).document
 
 
     def get_text_chunks(self, md_sections, tag_semantics=False):

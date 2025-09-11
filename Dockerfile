@@ -10,21 +10,25 @@ RUN apt-get update && \
 
 ARG TARGETARCH
 FROM base-${TARGETARCH} AS final
-
+ENV PYTHONUNBUFFERED=1 PYTHONIOENCODING=UTF-8
 WORKDIR /workspace
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      ffmpeg libsm6 libxext6 \
+      fontconfig fonts-noto-cjk fonts-noto-cjk-extra fonts-nanum && \
+    fc-cache -fv && \
+    rm -rf /var/lib/apt/lists/*
+RUN apt-get install ffmpeg libsm6 libxext6  -y
 
 COPY .env /workspace/.env
 COPY ./requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-      playwright install-deps && playwright install ; \
-    else \
-      playwright install ; \
-    fi
+COPY ./models/FZYTK.TTF /usr/local/lib/python3.12/site-packages/rapidocr/models
+RUN playwright install --with-deps
 
 COPY ./ /workspace
 
 EXPOSE 8085
 
-CMD ["python", "grpc_server.py"]
-
+CMD ["python", "-u", "grpc_server.py"]

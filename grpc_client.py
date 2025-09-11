@@ -3,6 +3,7 @@
 세 RPC(EmbedDocument, SummarizeDocument, RagChat) 테스트용 비동기 클라이언트
 """
 import sys
+import random
 sys.path.append("./proto")
 import asyncio, pathlib, grpc, os
 from proto import smart_notebook_pb2 as pb
@@ -23,7 +24,7 @@ async def embed_test(stub):
                 file_path="test3.pdf"
             )
         ],
-        req_id=1,
+        req_id=random.randint(0, 100),
         webhook_info=pb.WebhookInfo(
             endpoint="http://10.50.3.3:2903",
             notebook_id="notebook_id_example",
