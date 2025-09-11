@@ -3,6 +3,7 @@
 세 RPC(EmbedDocument, SummarizeDocument, RagChat) 테스트용 비동기 클라이언트
 """
 import sys
+import random
 sys.path.append("./proto")
 import asyncio, pathlib, grpc, os
 from proto import smart_notebook_pb2 as pb
@@ -13,17 +14,26 @@ TEST_URL = "https://docling-project.github.io/docling/examples/export_multimodal
 
 async def embed_test(stub):
     req = pb.EmbedRequest(
-        document=pb.EmbedRequest.DocumentMeta(
-            document_id="doc-001",
-            file_path="test2.pdf",
-        ),
-        req_id=1
+        documents=[
+            pb.EmbedRequest.DocumentMeta(
+                document_id="doc-001",
+                file_path="test2.pdf",
+            ),
+            pb.EmbedRequest.DocumentMeta(
+                document_id="doc-002",
+                file_path="test3.pdf"
+            )
+        ],
+        req_id=random.randint(0, 100),
+        webhook_info=pb.WebhookInfo(
+            endpoint="http://10.50.3.3:2903",
+            notebook_id="notebook_id_example",
+            jwt_token="jwt_token_example"
+        )
     )
     resp = await stub.EmbedDocument(req)
 
-    print("[EMBEDDED MARKDOWN]")
-    for section in resp.result.sections:
-        print(section)
+    print(resp)
 
 
 async def embed_test_url(stub, url):
@@ -35,10 +45,7 @@ async def embed_test_url(stub, url):
         req_id=1
     )
     resp = await stub.EmbedDocument(req)
-
-    print("[EMBEDDED MARKDOWN]")
-    for section in resp.result.sections:
-        print(section)
+    print(resp)
 
 async def summarize_test(stub):
     req = pb.SummarizeRequest(

@@ -5,7 +5,8 @@ package maumai.llm_agent.smart_notebook.v1;
 import "google/rpc/status.proto";
 
 service SmartNoteService {
-    rpc EmbedDocument (EmbedRequest) returns (EmbedResponse);
+    rpc EmbedDocument (EmbedRequest) returns (ProgressResponse);
+    rpc EmbedProgress (ProgressRequest) returns (ProgressResponse);
     rpc SummarizeDocument (SummarizeRequest) returns (SummarizeResponse);
     rpc RagChat (RagRequest) returns (stream RagResponse);
 };
@@ -78,38 +79,61 @@ message BinaryContent {
     bool end_of_stream = 6;
 }
 
+enum EmbedStage {
+    STAGE_UNSPECIFIED = 0;
+    STAGE_QUEUED      = 1;
+    STAGE_PARSING     = 3;
+    STAGE_CHUNKING    = 4;
+    STAGE_INDEXING    = 5;
+    STAGE_SUMMARIZING = 6;
+    STAGE_SUCCEEDED   = 7;
+    STAGE_FAILED      = 8;
+}
+
+message WebhookInfo {
+    string endpoint = 1;
+    string notebook_id = 2;
+    string jwt_token = 3;
+}
+
 message EmbedRequest {
     message DocumentMeta {
         string document_id = 1;
         oneof file {
-            string file_url = 2;
-            string file_path = 3;
-            bytes file_data = 4;
+            string file_url = 10;
+            string file_path = 11;
+            bytes file_data = 12;
         }
          // MUST PROVIDE SUFFIX if only if file type == file_data bytes, ex) .pdf / .xlsx / ...
-        optional string suffix = 5;
+        optional string suffix = 15;
     }
-    DocumentMeta document = 1;
-    EmbedConfig embed_config = 2; 
+    repeated DocumentMeta documents = 1;
+    EmbedConfig embed_config = 2;
     int64 req_id = 3;
+    WebhookInfo webhook_info = 4; // for sending embed result
+}
+
+message DocProgress {
+    string document_id = 1;
+    EmbedStage stage = 2;
+    optional string message = 3;
+  }
+
+message ProgressRequest {
+    int64 req_id = 1;
+    repeated string document_ids = 2;
+}
+
+message ProgressResponse {
+    int64 req_id = 1;
+    google.rpc.Status status = 2;
+    repeated DocProgress progresses = 3;
 }
 
 message MarkdownSection {
     string id = 1;
     string header = 2;
     string content = 3;
-}
-
-message EmbedResult {
-    string document_id = 1;
-    repeated MarkdownSection sections = 2;
-    string summary = 3;
-}
-
-message EmbedResponse {
-    int64 req_id = 1;
-    google.rpc.Status status = 2;
-    EmbedResult result = 3;
 }
 
 message SummarizeRequest {
