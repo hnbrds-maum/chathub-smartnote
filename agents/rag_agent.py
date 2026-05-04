@@ -10,6 +10,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.prompts.chat import ChatPromptTemplate
 
 from database.retriever import Retriever
+from agents.services.tavily_web_search import search_web
 from .base_agent import BaseAgent
 from .prompts import *
 
@@ -22,6 +23,8 @@ class RagAgentState(TypedDict):
     number_of_search: int
     title: str
     final_answer: str
+
+    use_web_search: bool
 
 class RagAgentConfig(TypedDict):
     llm: Any
@@ -104,6 +107,11 @@ def is_search_results_sufficient(state: RagAgentState, config) -> bool:
         return True
     return state['is_search_sufficient']
 
+def is_web_search_needed(state: RagAgentState, config) -> str:
+    if state.get("use_web_search", False):
+        return "search_web"
+    return "search_database"
+
 
 class RAGAnswerFormat(BaseModel):
     title: str = Field(description="Title for this conversation.")
@@ -136,11 +144,20 @@ class RagAgent(BaseAgent):
         rag_workflow = StateGraph(RagAgentState, RagAgentConfig)
         rag_workflow.add_node("generate_queries", generate_queries)
         rag_workflow.add_node("search_database", search_database)
+        rag_workflow.add_node("search_web", search_web)
         rag_workflow.add_node("evaluate_search_results", evaluate_search_results)
         rag_workflow.add_node("generate_rag_answer", generate_rag_answer)
 
         rag_workflow.add_edge(START, "generate_queries")
-        rag_workflow.add_edge("generate_queries", "search_database")
+        rag_workflow.add_conditional_edges(
+            "generate_queries",
+            is_web_search_needed,
+            {
+                "search_web": "search_web",
+                "search_database": "search_database"
+            }
+        )
+        rag_workflow.add_edge("search_web", "evaluate_search_results")
         rag_workflow.add_edge("search_database", "evaluate_search_results")
         rag_workflow.add_conditional_edges(
             "evaluate_search_results",
@@ -153,15 +170,24 @@ class RagAgent(BaseAgent):
         rag_workflow.add_edge("generate_rag_answer", END)
         self.workflow = rag_workflow
 
-    async def async_run(self, user_input):
-        if self.workflow is None:
-            self.build_workflow()
-        agent = self.workflow.compile()
-        config = {
-            "configurable" : {
-                "llm" : self.llm,
-                "retriever" : self.retriever,
-                "max_search_limit" : 3
+    async def async_run(self, user_input, use_web_search=False):
+        try:
+            if self.workflow is None:
+                self.build_workflow()
+            agent = self.workflow.compile()
+            config = {
+                "configurable" : {
+                    "llm": self.llm,
+                    "retriever": self.retriever,
+                    "max_search_limit": 3
+                }
             }
-        }
-        return await agent.ainvoke({"input": user_input}, config=config)
+            return await agent.ainvoke(
+                {"input": user_input, "use_web_search": use_web_search}, config=config
+            )
+        except Exception as e:
+            logging.error(e)
+            return {
+                "title": "Error",
+                "final_answer": str(e)
+            }

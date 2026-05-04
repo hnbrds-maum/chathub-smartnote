@@ -162,6 +162,8 @@ message RagRequest {
     string msg = 2;
     RetrievalConfig retrieval_config = 3;
     int64 req_id = 4;
+
+    bool use_web_search = 5;
 }
 
 message RagResponse {
