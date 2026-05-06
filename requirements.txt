@@ -52,3 +52,6 @@ pillow==11.2.1
 transformers==4.52.4
 protobuf==5.29.5
 numpy==2.2.4
+
+langchain-tavily==0.2.10
+tavily-python==0.5.4
