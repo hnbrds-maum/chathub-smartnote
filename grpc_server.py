@@ -44,7 +44,7 @@ from agents.summary_agent import SummaryAgent
 
 # ──────────────────────────────── 환경 설정
 
-FILE_ROOT = str(os.getenv("FILE_UPLOAD_DIR", "/app/data"))
+FILE_ROOT = str(os.getenv("FILE_UPLOAD_DIR", "/app"))
 VECTORSTORE_ROOT = str(os.getenv("VECTORSTORE_DIR", "/vectorstore"))
 OPENAI_MODEL_NAME = str(os.getenv("OPENAI_MODEL_NAME", "gpt-4.1"))
 REMOVE_EMBEDDED_DOCUMENT = os.getenv("REMOVE_EMBEDDED_DOCUMENT").lower() in ('true', '1', 't')
@@ -311,7 +311,6 @@ class SmartNoteService(pb_grpc.SmartNoteServiceServicer):
         request: pb.EmbedRequest,
         context: grpc.aio.ServicerContext,
     ) -> pb.ProgressResponse:
-        print(request)
 
         req_id = request.req_id
         docs = list(request.documents)
@@ -406,10 +405,12 @@ class SmartNoteService(pb_grpc.SmartNoteServiceServicer):
         try:
             llm = ChatOpenAI(model=OPENAI_MODEL_NAME)
             index_paths = [os.path.join(VECTORSTORE_ROOT, x) for x in list(request.document_id)]
-            answer = await RagAgent(llm, index_paths).async_run(request.msg)
-
+            
+            # tools
             use_web_search = bool(request.use_web_search)
+            logging.error("use_web_search: %s", use_web_search)
             answer = await RagAgent(llm, index_paths).async_run(request.msg, use_web_search)
+            logging.error("Answer: %s", answer['final_answer'])
             yield pb.RagResponse(
                 req_id=request.req_id, 
                 msg_role=pb.RagResponse.MessageRole.MSG_ROLE_ANSWER,
