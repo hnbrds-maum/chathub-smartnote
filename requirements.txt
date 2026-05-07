@@ -55,3 +55,4 @@ numpy==2.2.4
 
 langchain-tavily
 tavily-python
+beautifulsoup4==4.13.4

@@ -128,7 +128,7 @@ async def _send_webhook(session: aiohttp.ClientSession, url: str, token: str, pa
         logger.error(f"[webhook] An unexpected error occurred during webhook POST to {url}: {e}")
 
 
-def _parse_and_chunk_document(tmp_path_str: str, doc_id: str):
+def _parse_and_chunk_document(tmp_path_str: str, doc_id: str, file_url: Optional[str] = None):
     """
     동기적으로 실행될 파싱 및 청킹 작업.
     자식 프로세스에서 발생하는 모든 예외를 처리하여 BrokenProcessPool을 방지합니다.
@@ -138,7 +138,7 @@ def _parse_and_chunk_document(tmp_path_str: str, doc_id: str):
         from database.document_parser import DocumentParser
 
         tmp_path = Path(tmp_path_str)
-        parser = DocumentParser(tmp_path, document_id=doc_id)
+        parser = DocumentParser(tmp_path, document_id=doc_id, source_url=file_url)
         logger.info(f"Parsed document {tmp_path} ({doc_id})")
         markdown = parser.get_markdown()
         if not markdown:
@@ -188,9 +188,11 @@ async def run_one_document(req_id: int, doc: pb.EmbedRequest.DocumentMeta, webho
         loop = asyncio.get_running_loop()
 
         # 1. 입력 파일 준비 (Async I/O)
+        file_url = None
         async with IO_SEM:
             if doc.HasField("file_url"):
                 html = await afetch_rendered_html(doc.file_url)
+                file_url = doc.file_url
                 with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8") as fp:
                     fp.write(html)
                     tmp_path = Path(fp.name)
@@ -209,7 +211,7 @@ async def run_one_document(req_id: int, doc: pb.EmbedRequest.DocumentMeta, webho
         logger.info(f"[{req_id}/{doc_id}] Parsing and chunking in CPU executor...")
         # [수정] ProcessPoolExecutor에서 동기 함수 실행
         markdown, chunks, parse_error = await loop.run_in_executor(
-            CPU_EXECUTOR, _parse_and_chunk_document, str(tmp_path), doc_id
+            CPU_EXECUTOR, _parse_and_chunk_document, str(tmp_path), doc_id, file_url
         )
         if parse_error:
             raise RuntimeError(f"Parsing failed in worker: {parse_error}")

@@ -119,12 +119,14 @@ class DocumentParser:
     def __init__(self, document_path,
                  artifacts_path=ARTIFACTS_PATH,
                  embed_model_path=EMBED_MODEL_PATH,
-                 document_id=None):
+                 document_id=None,
+                 source_url=None):
         self.document_path = document_path
         self.artifacts_path = artifacts_path
         self.embed_model_path = embed_model_path
         self.document_id = document_id or str(uuid.uuid4())
         self.document = self._convert_document()
+        self.source_url = source_url
 
     def _convert_document(self):
         ocr_opts = RapidOcrOptions(
@@ -187,6 +189,7 @@ class DocumentParser:
                     "chunk_id" : chunk_id,
                     "chunk_type" : "TEXT",
                     "previous_id" : prev_chunk_id,
+                    "source_url": self.source_url
                 }
                 if tag_semantics:
                     topics, entities = self.tagger.extract_semantics(split)
@@ -222,6 +225,7 @@ class DocumentParser:
                     "chunk_id": chunk_id,
                     "chunk_type": item.label.upper(),
                     #"file_path" : img_path.as_posix()
+                    "source_url": self.source_url
                 }
 
                 if tag_semantics: 

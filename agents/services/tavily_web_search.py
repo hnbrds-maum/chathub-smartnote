@@ -51,7 +51,7 @@ def deduplicate_and_format_sources(search_response, max_tokens_per_source=500, i
             if len(raw_content) > char_limit:
                 raw_content = raw_content[:char_limit] + "... [truncated]"
             formatted_text += f"Full source content limited to {max_tokens_per_source} tokens: {raw_content}\n\n"
-        formatted_text += f"{'='*80}\n\n" # End section separator
+        formatted_text += f"{'='*10}\n\n" # End section separator
                 
     return formatted_text.strip()
 
@@ -133,9 +133,8 @@ async def search_web(state, config):
     #import logging
     #logging.error("web_documents: %s", web_documents)
     
-    updated_documents = existing_documents + [web_documents]
     
     return {
-        "documents": updated_documents,
+        "web_search_results": web_documents,
         "number_of_search": current_search_count + 1
     }

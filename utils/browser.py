@@ -1,5 +1,6 @@
 # html_fetcher.py
 from typing import Optional
+from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 from playwright.async_api import async_playwright
 
@@ -30,18 +31,30 @@ def fetch_rendered_html(url: str,
 
 async def afetch_rendered_html(url: str,
                               wait_selector: Optional[str] = None,
-                              timeout: int = 10_000) -> str:
+                              timeout: int = 30_000) -> str:
     """전체 JS 렌더링 결과 HTML 반환 (비동기 버전)"""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
-        response = await page.goto(url, wait_until="networkidle", timeout=timeout)
+        response = await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+        
         status = response.status if response else 0
         if status != 200:
             await browser.close()
-            raise HTTPStatusError(url, status)
+            raise Exception(f"HTTPStatusError: {url}, {status}") # 기존 HTTPStatusError로 대체
         if wait_selector:
             await page.wait_for_selector(wait_selector, timeout=timeout)
-        html = await page.content()
+            
+        raw_html = await page.content()
         await browser.close()
-        return html
+
+        soup = BeautifulSoup(raw_html, "html.parser")
+    
+        # 2-1. Docling의 파싱 속도를 늦추는 불필요한 태그 완전 제거
+        for tag in soup(["script", "style", "noscript", "svg", "button"]):
+            tag.decompose()
+        for a_tag in soup.find_all("a"):
+            a_tag.unwrap() 
+        
+        clean_html = str(soup)
+        return clean_html

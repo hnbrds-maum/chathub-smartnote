@@ -117,6 +117,7 @@ class Retriever:
             "heading_id": meta_first.get("heading_id"),
             "chunk_type": meta_first.get("chunk_type"),
             "file_path": meta_last.get("file_path"),
+            "source_url": meta_last.get("source_url")
         }
         return {"content": content, "metadata": merged_meta}
 

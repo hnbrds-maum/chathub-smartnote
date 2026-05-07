@@ -19,11 +19,11 @@ class RagAgentState(TypedDict):
     input: str
     search_queries: List[str]
     documents: List[str]
+    web_search_results: List[str]
     is_search_sufficient: bool
     number_of_search: int
     title: str
     final_answer: str
-
     use_web_search: bool
 
 class RagAgentConfig(TypedDict):
@@ -33,7 +33,14 @@ class RagAgentConfig(TypedDict):
 
 
 def format_document(document):
-    return f"""DOC_ID : {document['metadata']['document_id']} / HEADING_ID : {document['metadata']['heading_id']}
+    doc_id = document['metadata']['document_id']
+    heading_id = document['metadata']['heading_id']
+    source_url = document['metadata'].get('source_url', '')
+    
+    if source_url:
+        return f"""SOURCE_URL : {source_url}
+        {document['content'].strip()}"""
+    return f"""DOC_ID : {doc_id} / HEADING_ID : {heading_id}
     {document['content'].strip()}"""
 
 
@@ -96,7 +103,8 @@ async def evaluate_search_results(state: RagAgentState, config):
     chain = prompt | llm.with_structured_output(EvaluateSearchFormat)
     response = await chain.ainvoke(
         {"input": state['input'],
-         "documents" : state['documents']}
+         "documents" : state.get('documents', []),
+         "web_search_results": state.get('web_search_results', [])}
     )
     return {"is_search_sufficient": response.is_sufficient}
 
@@ -121,13 +129,14 @@ async def generate_rag_answer(state: RagAgentState, config):
     llm = config['configurable'].get("llm")
     user_prompt = Template(GENERATE_RAG_ANSWER_USER).render(
         input=state['input'],
-        documents=state['documents']
+        documents=state.get('documents', []),
+        web_search_results=state.get('web_search_results', [])
     )
     prompt = ChatPromptTemplate.from_messages(
         [("system", GENERATE_RAG_ANSWER_SYSTEM), ("human", user_prompt)]
     )
     chain = prompt | llm.with_structured_output(RAGAnswerFormat)
-    response = await chain.ainvoke({"input" : state['input'], "documents" : state['documents']})
+    response = await chain.ainvoke({"input" : state['input']})
     return {
         "title" : response.title,
         "final_answer": response.answer
