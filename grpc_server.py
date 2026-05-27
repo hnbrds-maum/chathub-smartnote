@@ -135,15 +135,25 @@ def _parse_and_chunk_document(tmp_path_str: str, doc_id: str, file_url: Optional
     Path 객체 대신 문자열을 인자로 받아 직렬화 문제를 방지합니다.
     """
     try:
-        from database.document_parser import DocumentParser
+        if tmp_path_str.endswith(".txt"):
+            from database.document_parser import TextParser
+            tmp_path = Path(tmp_path_str)
+            parser = TextParser(tmp_path, document_id=doc_id, source_url=file_url)
+            logger.info(f"Parsed document {tmp_path} (  {doc_id})")
+            markdown = parser.get_markdown()
+            if not markdown:
+                return None, None, "Document has no text"
+            chunks = parser.get_chunk()
+        else:
+            from database.document_parser import DocumentParser
 
-        tmp_path = Path(tmp_path_str)
-        parser = DocumentParser(tmp_path, document_id=doc_id, source_url=file_url)
-        logger.info(f"Parsed document {tmp_path} ({doc_id})")
-        markdown = parser.get_markdown()
-        if not markdown:
-            return None, None, "Document has no text"
-        chunks = parser.get_chunk(markdown)
+            tmp_path = Path(tmp_path_str)
+            parser = DocumentParser(tmp_path, document_id=doc_id, source_url=file_url)
+            logger.info(f"Parsed document {tmp_path} ({doc_id})")
+            markdown = parser.get_markdown()
+            if not markdown:
+                return None, None, "Document has no text"
+            chunks = parser.get_chunk(markdown)
         return markdown, chunks, None  # 성공: (결과1, 결과2, 에러 없음)
     except AttributeError as ae:
         # docling의 OCR 관련 오류인지 확인

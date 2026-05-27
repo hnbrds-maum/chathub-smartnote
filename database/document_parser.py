@@ -111,7 +111,68 @@ class OpenaiTagger:
             text_format=VLMFormat,
         ).output_parsed
         return response.image_type, response.caption
+
+
+class TextParser:
+    def __init__(self, document_path,
+                 artifacts_path=ARTIFACTS_PATH,
+                 embed_model_path=EMBED_MODEL_PATH,
+                 document_id=None,
+                 source_url=None):
+        self.document_path = document_path
+        self.artifacts_path = artifacts_path
+        self.embed_model_path = embed_model_path
+        self.document_id = document_id or str(uuid.uuid4())
+        self.document = self._parse_txt()
+        self.source_url = source_url
+        self.heading_id = str(uuid.uuid4())
     
+    def _parse_txt(self):
+        with open(self.document_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return content
+
+    def get_text_chunks(self):
+        prev_chunk_id = None
+        text_chunks = []
+
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
+        )
+        splits = text_splitter.split_text(self.document)
+        for split in splits:
+            chunk_id = uuid.uuid4().hex
+            metadata = {
+                "document_id" : self.document_id,
+                "heading_id" : self.heading_id,
+                "chunk_id" : chunk_id,
+                "chunk_type" : "TEXT",
+                "previous_id" : prev_chunk_id,
+                "source_url": self.source_url
+            }
+
+            text_chunks.append(Document(
+                page_content=split,
+                metadata=metadata
+            ))
+            prev_chunk_id = chunk_id
+        return text_chunks
+
+    def get_chunk(self, tag_semantics=False, parse_image=False, markdown=None):
+        return self.get_text_chunks()
+
+    def get_markdown(self):
+        result = []
+        result.append(
+            MarkdownSection(
+                id=self.heading_id,
+                sequence=0,
+                header="",
+                content=self.document
+            )
+        )
+        return result
+
 
 class DocumentParser:
     DEFAULT_IMAGE_RESOLUTION_SCALE = 2.0
